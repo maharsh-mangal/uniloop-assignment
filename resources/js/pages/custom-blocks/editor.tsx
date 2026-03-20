@@ -1,87 +1,69 @@
 import { Head, useForm } from '@inertiajs/react';
 import Editor from '@monaco-editor/react';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import AppLayout from '@/layouts/app-layout';
+import { transpileAndExtract } from '@/lib/transpile-block';
 
-const DEFAULT_SOURCE = `import React, { forwardRef } from "react";
-import type {
-  BlockDefinition,
-  ContentBlockItemProps,
-  BlockRendererProps,
-  BlockData,
-} from "@/packages/survey-form-package/src/types";
-import { Label } from "@/packages/survey-form-package/src/components/ui/label";
-import { Input } from "@/packages/survey-form-package/src/components/ui/input";
-import { Card } from "@/packages/survey-form-package/src/components/ui/card";
-import { Type } from "lucide-react";
-import { cn } from "@/packages/survey-form-package/src/lib/utils";
-import { themes } from "@/packages/survey-form-package/src/themes";
+const DEFAULT_SOURCE = `import React, { forwardRef, useState } from "react";
 
-const CustomRenderer = forwardRef<HTMLInputElement, BlockRendererProps>(
-  ({ block, value, onChange, onBlur, error, disabled, theme }, ref) => {
-    const themeConfig = theme ?? themes.default;
+const Renderer = forwardRef(({ block, value, onChange, error, disabled }, ref) => {
+  const [count, setCount] = useState(0);
 
-    return (
-      <div className="w-full min-w-0">
-        {block.label && (
-          <Label className={cn("mb-2 block", themeConfig.field.label)}>
-            {block.label}
-          </Label>
-        )}
-        <Input
-          ref={ref}
-          type="text"
-          placeholder={block.placeholder}
-          value={value || ""}
-          onChange={(e) => onChange?.(e.target.value)}
-          onBlur={onBlur}
-          disabled={disabled}
-          className={cn(error && "border-destructive", themeConfig.field.input)}
-        />
-        {error && (
-          <div className={cn("text-sm mt-1", themeConfig.field.error)}>{error}</div>
-        )}
-      </div>
-    );
-  }
-);
-
-CustomRenderer.displayName = "CustomRenderer";
-
-const CustomBlockItem: React.FC<ContentBlockItemProps> = ({ data }) => (
-  <Card className="space-y-2 p-4">
-    {data.label && <Label>{data.label}</Label>}
-    <Input disabled placeholder={data.placeholder || "Preview"} />
-  </Card>
-);
-
-const CustomBlockPreview: React.FC = () => (
-  <div className="w-full flex items-center justify-center py-1">
-    <div className="w-4/5 border rounded-md p-2 text-xs text-muted-foreground bg-muted/30">
-      Custom Input
+  return (
+    <div ref={ref} style={{ padding: 16 }}>
+      <label style={{ display: "block", fontWeight: 600, marginBottom: 8 }}>
+        {block.label}
+      </label>
+      <input
+        type="text"
+        value={value || ""}
+        onChange={(e) => onChange?.(e.target.value)}
+        disabled={disabled}
+        placeholder={block.placeholder}
+        style={{
+          width: "100%",
+          padding: "8px 12px",
+          border: error ? "2px solid red" : "1px solid #ccc",
+          borderRadius: 6,
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => setCount(c => c + 1)}
+        style={{
+          marginTop: 8,
+          padding: "6px 16px",
+          background: "#333",
+          color: "#fff",
+          border: "none",
+          borderRadius: 6,
+          cursor: "pointer",
+        }}
+      >
+        Clicked {count} times
+      </button>
+      {error && <div style={{ color: "red", marginTop: 4 }}>{error}</div>}
     </div>
-  </div>
-);
+  );
+});
 
-export const CustomBlock: BlockDefinition = {
-  type: "customBlock",
-  name: "Custom Block",
-  description: "A custom input block",
-  icon: <Type className="w-4 h-4" />,
+Renderer.displayName = "TestRenderer";
+
+export const TestBlock = {
+  type: "testBlock",
+  name: "Test Block",
+  description: "A simple test block",
   defaultData: {
-    type: "customBlock",
-    fieldName: "customField",
-    label: "Custom Field",
-    placeholder: "Enter value...",
+    type: "testBlock",
+    fieldName: "testField",
+    label: "Test Input",
+    placeholder: "Type something...",
   },
-  renderItem: (props) => <CustomBlockItem {...props} />,
+  renderItem: ({ data }) => <div style={{ padding: 8 }}>{data.label}</div>,
   renderFormFields: () => <div>No config</div>,
-  renderPreview: () => <CustomBlockPreview />,
-  renderBlock: (props) => <CustomRenderer {...props} />,
-  validate: (data: BlockData) => {
-    if (!data.fieldName) return "Field name is required";
-    return null;
-  },
+  renderPreview: () => <div style={{ padding: 4, fontSize: 12 }}>Test Block</div>,
+  renderBlock: (props) => <Renderer {...props} />,
+  validate: () => null,
   validateValue: () => null,
 };`;
 
@@ -93,6 +75,91 @@ interface CustomBlock {
     icon_name: string;
     source_code: string;
     is_active: boolean;
+}
+
+function BlockPreview({ sourceCode }: { sourceCode: string }) {
+    const [preview, setPreview] = useState<{
+        component: React.ReactNode | null;
+        error: string | null;
+    }>({ component: null, error: null });
+
+    const [formValue, setFormValue] = useState('');
+    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Debounce: wait 800ms after user stops typing before transpiling
+    useEffect(() => {
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+        }
+
+        timerRef.current = setTimeout(() => {
+            const result = transpileAndExtract(sourceCode);
+
+            if (result.success && result.blockDefinition) {
+                try {
+                    const block = result.blockDefinition;
+                    const element = block.renderBlock({
+                        block: block.defaultData,
+                        value: formValue,
+                        onChange: (val: any) => setFormValue(val),
+                        error: undefined,
+                        disabled: false,
+                    });
+                    setPreview({ component: element, error: null });
+                } catch (err: any) {
+                    setPreview({ component: null, error: 'Render error: ' + err.message });
+                }
+            } else {
+                setPreview({ component: null, error: result.error || 'Unknown error' });
+            }
+        }, 800);
+
+        return () => {
+            if (timerRef.current) {
+clearTimeout(timerRef.current);
+}
+        };
+    }, [sourceCode]);
+
+    // Re-render with updated value without re-transpiling
+    useEffect(() => {
+        const result = transpileAndExtract(sourceCode);
+
+        if (result.success && result.blockDefinition) {
+            try {
+                const block = result.blockDefinition;
+                const element = block.renderBlock({
+                    block: block.defaultData,
+                    value: formValue,
+                    onChange: (val: any) => setFormValue(val),
+                    error: undefined,
+                    disabled: false,
+                });
+                setPreview({ component: element, error: null });
+            } catch (err: any) {
+                setPreview({ component: null, error: 'Render error: ' + err.message });
+            }
+        }
+    }, [formValue]);
+
+    if (preview.error) {
+        return (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                <div className="mb-1 text-sm font-medium text-red-800">Error</div>
+                <pre className="whitespace-pre-wrap text-xs text-red-600">{preview.error}</pre>
+            </div>
+        );
+    }
+
+    if (!preview.component) {
+        return <p className="text-sm text-neutral-400">Transpiling...</p>;
+    }
+
+    return (
+        <div className="rounded-lg border bg-white p-6 text-black">
+            {preview.component}
+        </div>
+    );
 }
 
 export default function BlockEditor({ block }: { block?: CustomBlock }) {
@@ -118,15 +185,10 @@ export default function BlockEditor({ block }: { block?: CustomBlock }) {
 
     return (
         <AppLayout>
-            <Head
-                title={isEditing ? `Edit: ${block.name}` : 'New Custom Block'}
-            />
+            <Head title={isEditing ? `Edit: ${block.name}` : 'New Custom Block'} />
             <div className="flex h-[calc(100vh-4rem)] flex-col">
                 {/* Top bar */}
-                <form
-                    onSubmit={handleSubmit}
-                    className="flex items-center gap-4 border-b px-4 py-3"
-                >
+                <form onSubmit={handleSubmit} className="flex items-center gap-4 border-b px-4 py-3">
                     <input
                         type="text"
                         placeholder="Block Name"
@@ -145,9 +207,7 @@ export default function BlockEditor({ block }: { block?: CustomBlock }) {
                         type="text"
                         placeholder="Description"
                         value={form.data.description}
-                        onChange={(e) =>
-                            form.setData('description', e.target.value)
-                        }
+                        onChange={(e) => form.setData('description', e.target.value)}
                         className="rounded-md border px-3 py-1.5 text-sm"
                     />
                     <div className="ml-auto flex gap-2">
@@ -182,13 +242,10 @@ export default function BlockEditor({ block }: { block?: CustomBlock }) {
                                     esModuleInterop: true,
                                     allowNonTsExtensions: true,
                                 });
-
-                                monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(
-                                    {
-                                        noSemanticValidation: true,
-                                        noSyntaxValidation: false, // Keeps basic syntax checks (like missing brackets) active
-                                    },
-                                );
+                                monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+                                    noSemanticValidation: true,
+                                    noSyntaxValidation: false,
+                                });
                             }}
                             options={{
                                 minimap: { enabled: false },
@@ -201,16 +258,10 @@ export default function BlockEditor({ block }: { block?: CustomBlock }) {
                         />
                     </div>
 
-                    {/* Preview panel - empty for now */}
-                    <div className="w-1/2 bg-neutral-50 p-6">
-                        <div className="mb-4 text-sm font-medium text-neutral-500">
-                            Preview
-                        </div>
-                        <div className="rounded-lg border bg-white p-6">
-                            <p className="text-sm text-neutral-400">
-                                Live preview will render here
-                            </p>
-                        </div>
+                    {/* Preview panel */}
+                    <div className="w-1/2 bg-neutral-50 p-6 overflow-y-auto">
+                        <div className="mb-4 text-sm font-medium text-neutral-500">Preview</div>
+                        <BlockPreview sourceCode={form.data.source_code} />
                     </div>
                 </div>
             </div>
