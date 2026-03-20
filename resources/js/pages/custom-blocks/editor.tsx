@@ -1,6 +1,7 @@
 import { Head, useForm } from '@inertiajs/react';
 import Editor from '@monaco-editor/react';
 import { useState, useEffect, useRef } from 'react';
+import { ErrorBoundary } from '@/components/error-boundry';
 import AppLayout from '@/layouts/app-layout';
 import { transpileAndExtract } from '@/lib/transpile-block';
 
@@ -77,16 +78,23 @@ interface CustomBlock {
     is_active: boolean;
 }
 
-function BlockPreview({ sourceCode }: { sourceCode: string }) {
-    const [preview, setPreview] = useState<{
-        component: React.ReactNode | null;
-        error: string | null;
-    }>({ component: null, error: null });
+function ErrorDisplay({ title, message }: { title: string; message: string }) {
+    return (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+            <div className="mb-1 text-sm font-medium text-red-800">{title}</div>
+            <pre className="text-xs whitespace-pre-wrap text-red-600">
+                {message}
+            </pre>
+        </div>
+    );
+}
 
-    const [formValue, setFormValue] = useState('');
+function BlockPreview({ sourceCode }: { sourceCode: string }) {
+    const [blockDef, setBlockDef] = useState<any>(null);
+    const [error, setError] = useState<string | null>(null);
+    const [key, setKey] = useState(0);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Debounce: wait 800ms after user stops typing before transpiling
     useEffect(() => {
         if (timerRef.current) {
             clearTimeout(timerRef.current);
@@ -96,69 +104,75 @@ function BlockPreview({ sourceCode }: { sourceCode: string }) {
             const result = transpileAndExtract(sourceCode);
 
             if (result.success && result.blockDefinition) {
-                try {
-                    const block = result.blockDefinition;
-                    const element = block.renderBlock({
-                        block: block.defaultData,
-                        value: formValue,
-                        onChange: (val: any) => setFormValue(val),
-                        error: undefined,
-                        disabled: false,
-                    });
-                    setPreview({ component: element, error: null });
-                } catch (err: any) {
-                    setPreview({ component: null, error: 'Render error: ' + err.message });
-                }
+                setBlockDef(result.blockDefinition);
+                setError(null);
+                setKey((k) => k + 1);
             } else {
-                setPreview({ component: null, error: result.error || 'Unknown error' });
+                setBlockDef(null);
+                setError(result.error || 'Unknown error');
             }
         }, 800);
 
         return () => {
             if (timerRef.current) {
-clearTimeout(timerRef.current);
-}
+                clearTimeout(timerRef.current);
+            }
         };
     }, [sourceCode]);
 
-    // Re-render with updated value without re-transpiling
-    useEffect(() => {
-        const result = transpileAndExtract(sourceCode);
-
-        if (result.success && result.blockDefinition) {
-            try {
-                const block = result.blockDefinition;
-                const element = block.renderBlock({
-                    block: block.defaultData,
-                    value: formValue,
-                    onChange: (val: any) => setFormValue(val),
-                    error: undefined,
-                    disabled: false,
-                });
-                setPreview({ component: element, error: null });
-            } catch (err: any) {
-                setPreview({ component: null, error: 'Render error: ' + err.message });
-            }
-        }
-    }, [formValue]);
-
-    if (preview.error) {
-        return (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-                <div className="mb-1 text-sm font-medium text-red-800">Error</div>
-                <pre className="whitespace-pre-wrap text-xs text-red-600">{preview.error}</pre>
-            </div>
-        );
+    if (error) {
+        return <ErrorDisplay title="Transpilation Error" message={error} />;
     }
 
-    if (!preview.component) {
+    if (!blockDef) {
         return <p className="text-sm text-neutral-400">Transpiling...</p>;
     }
 
     return (
         <div className="rounded-lg border bg-white p-6 text-black">
-            {preview.component}
+            <ErrorBoundary
+                key={key}
+                fallback={(err: { message: string }) => (
+                    <ErrorDisplay title="Render Error" message={err.message} />
+                )}
+            >
+                <LiveBlock blockDef={blockDef} />
+            </ErrorBoundary>
         </div>
+    );
+}
+
+function LiveBlock({ blockDef }: { blockDef: any }) {
+    const [formValue, setFormValue] = useState('');
+
+    if (!blockDef.renderBlock) {
+        return (
+            <ErrorDisplay
+                title="Missing renderBlock"
+                message='Your BlockDefinition must have a "renderBlock" method.'
+            />
+        );
+    }
+
+    if (!blockDef.defaultData) {
+        return (
+            <ErrorDisplay
+                title="Missing defaultData"
+                message='Your BlockDefinition must have a "defaultData" object.'
+            />
+        );
+    }
+
+    return (
+        <>
+            {blockDef.renderBlock({
+                block: blockDef.defaultData,
+                value: formValue,
+                onChange: (val: any) => setFormValue(val),
+                error: undefined,
+                disabled: false,
+            })}
+        </>
     );
 }
 
@@ -189,27 +203,39 @@ export default function BlockEditor({ block }: { block?: CustomBlock }) {
             <div className="flex h-[calc(100vh-4rem)] flex-col">
                 {/* Top bar */}
                 <form onSubmit={handleSubmit} className="flex items-center gap-4 border-b px-4 py-3">
-                    <input
-                        type="text"
-                        placeholder="Block Name"
-                        value={form.data.name}
-                        onChange={(e) => form.setData('name', e.target.value)}
-                        className="rounded-md border px-3 py-1.5 text-sm"
-                    />
-                    <input
-                        type="text"
-                        placeholder="Type (unique ID)"
-                        value={form.data.type}
-                        onChange={(e) => form.setData('type', e.target.value)}
-                        className="rounded-md border px-3 py-1.5 text-sm"
-                    />
-                    <input
-                        type="text"
-                        placeholder="Description"
-                        value={form.data.description}
-                        onChange={(e) => form.setData('description', e.target.value)}
-                        className="rounded-md border px-3 py-1.5 text-sm"
-                    />
+                    <div>
+                        <input
+                            type="text"
+                            placeholder="Block Name"
+                            value={form.data.name}
+                            onChange={(e) => form.setData('name', e.target.value)}
+                            className={`rounded-md border px-3 py-1.5 text-sm ${form.errors.name ? 'border-red-500' : ''}`}
+                        />
+                        {form.errors.name && (
+                            <p className="mt-1 text-xs text-red-500">{form.errors.name}</p>
+                        )}
+                    </div>
+                    <div>
+                        <input
+                            type="text"
+                            placeholder="Type (unique ID)"
+                            value={form.data.type}
+                            onChange={(e) => form.setData('type', e.target.value)}
+                            className={`rounded-md border px-3 py-1.5 text-sm ${form.errors.type ? 'border-red-500' : ''}`}
+                        />
+                        {form.errors.type && (
+                            <p className="mt-1 text-xs text-red-500">{form.errors.type}</p>
+                        )}
+                    </div>
+                    <div>
+                        <input
+                            type="text"
+                            placeholder="Description"
+                            value={form.data.description}
+                            onChange={(e) => form.setData('description', e.target.value)}
+                            className="rounded-md border px-3 py-1.5 text-sm"
+                        />
+                    </div>
                     <div className="ml-auto flex gap-2">
                         <button
                             type="submit"
@@ -259,7 +285,7 @@ export default function BlockEditor({ block }: { block?: CustomBlock }) {
                     </div>
 
                     {/* Preview panel */}
-                    <div className="w-1/2 bg-neutral-50 p-6 overflow-y-auto">
+                    <div className="w-1/2 overflow-y-auto bg-neutral-50 p-6">
                         <div className="mb-4 text-sm font-medium text-neutral-500">Preview</div>
                         <BlockPreview sourceCode={form.data.source_code} />
                     </div>
