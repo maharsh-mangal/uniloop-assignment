@@ -63,4 +63,11 @@ class CustomBlockController extends Controller
 
         return redirect()->route('custom-blocks.index');
     }
+
+    public function preview()
+    {
+        return Inertia::render('custom-blocks/preview', [
+            'blocks' => CustomBlock::where('is_active', true)->get(),
+        ]);
+    }
 }

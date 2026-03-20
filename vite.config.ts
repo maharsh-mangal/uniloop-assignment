@@ -25,6 +25,8 @@ export default defineConfig({
     resolve: {
         alias: {
             '@/packages/survey-form-package': path.resolve(__dirname, 'resources/js/packages/survey-form-package'),
+            'react': path.resolve(__dirname, 'node_modules/react'),
+            'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
         },
     },
     esbuild: {
