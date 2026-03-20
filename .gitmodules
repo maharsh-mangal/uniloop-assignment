@@ -1,0 +1,3 @@
+[submodule "resources/js/packages/survey-form-package"]
+	path = resources/js/packages/survey-form-package
+	url = https://github.com/UNILOOP/uniloop-intake-core.git
