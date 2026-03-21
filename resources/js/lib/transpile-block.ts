@@ -1,11 +1,21 @@
 import * as Babel from '@babel/standalone';
-import React, { forwardRef, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import * as LucideIcons from 'lucide-react';
+import React, {
+    forwardRef,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
 
-/**
- * Available modules that custom block code can import.
- * When the user writes `import { useState } from "react"`,
- * we intercept that and provide it from this map.
- */
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/packages/survey-form-package/src/components/ui/card';
+import { Input } from '@/packages/survey-form-package/src/components/ui/input';
+import { Label } from '@/packages/survey-form-package/src/components/ui/label';
+import { SurveyFormContext, useSurveyForm } from '@/packages/survey-form-package/src/context/SurveyFormContext';
+import { cn } from '@/packages/survey-form-package/src/lib/utils';
+import { themes } from '@/packages/survey-form-package/src/themes';
+import type { BlockDefinition } from '@/packages/survey-form-package/src/types';
 
 const reactModule = {
     ...React,
@@ -18,14 +28,30 @@ const reactModule = {
     useMemo,
 };
 
-const MODULE_MAP: Record<string, any> = {
-    react: reactModule,
+const MODULE_MAP: Record<string, unknown> = {
+    'react': reactModule,
+    'lucide-react': LucideIcons,
+    '@/packages/survey-form-package/src/types': {},
+    '@/packages/survey-form-package/src/components/ui/label': { Label, default: Label },
+    '@/packages/survey-form-package/src/components/ui/input': { Input, default: Input },
+    '@/packages/survey-form-package/src/components/ui/card': {
+        Card,
+        CardHeader,
+        CardTitle,
+        CardDescription,
+        CardContent,
+        CardFooter,
+        default: Card,
+    },
+    '@/packages/survey-form-package/src/lib/utils': { cn, default: cn },
+    '@/packages/survey-form-package/src/themes': { themes, default: themes },
+    '@/packages/survey-form-package/src/context/SurveyFormContext': {
+        useSurveyForm,
+        SurveyFormContext,
+    },
 };
 
-/**
- * Custom require function that resolves imports from MODULE_MAP.
- */
-function customRequire(moduleName: string) {
+function customRequire(moduleName: string): unknown {
     if (MODULE_MAP[moduleName]) {
         return MODULE_MAP[moduleName];
     }
@@ -33,17 +59,45 @@ function customRequire(moduleName: string) {
     throw new Error(`Module "${moduleName}" is not available in the block editor.`);
 }
 
-/**
- * Takes a TSX source string, transpiles it with Babel,
- * executes it, and returns the exported BlockDefinition.
- */
-export function transpileAndExtract(sourceCode: string): {
+function hashCode(str: string): string {
+    let hash = 0;
+
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+    }
+
+    return hash.toString(36);
+}
+
+interface TranspileResult {
     success: boolean;
-    blockDefinition?: any;
+    blockDefinition?: BlockDefinition;
     error?: string;
-} {
+}
+
+const MAX_CACHE_SIZE = 50;
+const transpilationCache = new Map<string, TranspileResult>();
+
+function isBlockDefinition(exp: unknown): exp is BlockDefinition {
+    return (
+        typeof exp === 'object' &&
+        exp !== null &&
+        'type' in exp &&
+        'renderBlock' in exp &&
+        typeof (exp as BlockDefinition).renderBlock === 'function'
+    );
+}
+
+export function transpileAndExtract(sourceCode: string): TranspileResult {
+    const cacheKey = hashCode(sourceCode);
+
+    if (transpilationCache.has(cacheKey)) {
+        return transpilationCache.get(cacheKey)!;
+    }
+
     try {
-        // Step 1: Babel transpile — converts JSX and strips TypeScript
         const result = Babel.transform(sourceCode, {
             presets: ['react', 'typescript'],
             plugins: ['transform-modules-commonjs'],
@@ -54,29 +108,40 @@ export function transpileAndExtract(sourceCode: string): {
             return { success: false, error: 'Babel transpilation returned empty result.' };
         }
 
-        // Step 2: Execute the transpiled code
-        // new Function creates a function from a string — like eval but slightly more controlled.
-        // We pass in `require`, `exports`, and `React` as available variables.
-        const exports: Record<string, any> = {};
+        const exports: Record<string, unknown> = {};
         const fn = new Function('require', 'exports', 'React', result.code);
         fn(customRequire, exports, React);
 
-        // Step 3: Find the exported BlockDefinition
-        // The user's code does `export const MyBlock: BlockDefinition = { ... }`
-        // After commonjs transform, that becomes `exports.MyBlock = { ... }`
-        const blockDefinition = Object.values(exports).find(
-            (exp: any) => exp && typeof exp === 'object' && exp.type && exp.renderBlock
-        );
+        const blockDefinition = Object.values(exports).find(isBlockDefinition);
 
         if (!blockDefinition) {
-            return {
+            const cached: TranspileResult = {
                 success: false,
                 error: 'No valid BlockDefinition export found. Make sure your code exports an object with "type" and "renderBlock".',
             };
+            transpilationCache.set(cacheKey, cached);
+
+            return cached;
         }
 
-        return { success: true, blockDefinition };
-    } catch (err: any) {
-        return { success: false, error: err.message };
+        const cached: TranspileResult = { success: true, blockDefinition };
+
+        if (transpilationCache.size >= MAX_CACHE_SIZE) {
+            const firstKey = transpilationCache.keys().next().value;
+
+            if (firstKey) {
+                transpilationCache.delete(firstKey);
+            }
+        }
+
+        transpilationCache.set(cacheKey, cached);
+
+        return cached;
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        const cached: TranspileResult = { success: false, error: message };
+        transpilationCache.set(cacheKey, cached);
+
+        return cached;
     }
 }

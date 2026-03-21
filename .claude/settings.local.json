@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"C:\\\\Users\\\\Maharsh\\\\Herd\\\\uniloop-assignment\" log --oneline -15)",
+      "Bash(git -C \"C:\\\\Users\\\\Maharsh\\\\Herd\\\\uniloop-assignment\" log --format=\"%H %s\" -15)",
+      "Bash(git -C \"C:\\\\Users\\\\Maharsh\\\\Herd\\\\uniloop-assignment\" show --stat 95eb8ac)",
+      "Bash(npm ls:*)"
+    ]
+  }
+}
