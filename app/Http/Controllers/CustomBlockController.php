@@ -2,16 +2,38 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreCustomBlockRequest;
+use App\Http\Requests\UpdateCustomBlockRequest;
+use App\Http\Resources\CustomBlockResource;
 use App\Models\CustomBlock;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class CustomBlockController extends Controller
 {
-    public function index()
+    use AuthorizesRequests;
+
+    public function index(Request $request)
     {
         return Inertia::render('custom-blocks/index', [
-            'blocks' => CustomBlock::latest()->get(),
+            'blocks' => CustomBlockResource::collection(
+                $request->user()
+                    ->customBlocks()
+                    ->search($request->input('search'))
+                    ->status($request->input('status'))
+                    ->latest()
+                    ->paginate(10)
+                    ->withQueryString()
+            ),
+            'filters' => [
+                'search' => $request->input('search', ''),
+                'status' => $request->input('status', 'all'),
+            ],
+            'stats' => [
+                'total' => $request->user()->customBlocks()->count(),
+                'active' => $request->user()->customBlocks()->where('is_active', true)->count(),
+            ],
         ]);
     }
 
@@ -20,54 +42,55 @@ class CustomBlockController extends Controller
         return Inertia::render('custom-blocks/editor');
     }
 
-    public function store(Request $request)
+    public function store(StoreCustomBlockRequest $request)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'type' => 'required|string|max:255|unique:custom_blocks,type',
-            'description' => 'nullable|string',
-            'icon_name' => 'nullable|string|max:255',
-            'source_code' => 'required|string',
-        ]);
-
-        CustomBlock::query()->create($validated);
+        $request->user()->customBlocks()->create($request->validated());
 
         return redirect()->route('custom-blocks.index');
     }
 
     public function edit(CustomBlock $customBlock)
     {
+        $this->authorize('view', $customBlock);
+
         return Inertia::render('custom-blocks/editor', [
-            'block' => $customBlock,
+            'block' => new CustomBlockResource($customBlock),
         ]);
     }
 
-    public function update(Request $request, CustomBlock $customBlock)
+    public function update(UpdateCustomBlockRequest $request, CustomBlock $customBlock)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'type' => 'required|string|max:255|unique:custom_blocks,type,' . $customBlock->id,
-            'description' => 'nullable|string',
-            'icon_name' => 'nullable|string|max:255',
-            'source_code' => 'required|string',
-        ]);
+        $this->authorize('update', $customBlock);
 
-        $customBlock->update($validated);
+        $customBlock->update($request->validated());
 
         return redirect()->route('custom-blocks.index');
     }
 
     public function destroy(CustomBlock $customBlock)
     {
+        $this->authorize('delete', $customBlock);
+
         $customBlock->delete();
 
         return redirect()->route('custom-blocks.index');
     }
 
-    public function preview()
+    public function preview(Request $request)
     {
         return Inertia::render('custom-blocks/preview', [
-            'blocks' => CustomBlock::where('is_active', true)->get(),
+            'blocks' => CustomBlockResource::collection(
+                $request->user()->customBlocks()->where('is_active', true)->get()
+            ),
         ]);
+    }
+
+    public function toggle(CustomBlock $customBlock)
+    {
+        $this->authorize('update', $customBlock);
+
+        $customBlock->update(['is_active' => !$customBlock->is_active]);
+
+        return back();
     }
 }
