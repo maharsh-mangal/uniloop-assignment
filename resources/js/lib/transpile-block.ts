@@ -145,3 +145,95 @@ export function transpileAndExtract(sourceCode: string): TranspileResult {
         return cached;
     }
 }
+
+export interface ValidationIssue {
+    level: 'error' | 'warning';
+    message: string;
+}
+
+export function validateBlockDefinition(sourceCode: string): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+    const result = transpileAndExtract(sourceCode);
+
+    if (!result.success) {
+        issues.push({ level: 'error', message: result.error || 'Transpilation failed.' });
+
+        return issues;
+    }
+
+    const def = result.blockDefinition;
+
+    if (!def) {
+        issues.push({ level: 'error', message: 'No exported BlockDefinition found.' });
+
+        return issues;
+    }
+
+    // Required
+    if (!def.type) {
+        issues.push({ level: 'error', message: 'Missing "type" — must be a unique string identifier.' });
+    }
+
+    if (!def.renderBlock || typeof def.renderBlock !== 'function') {
+        issues.push({ level: 'error', message: 'Missing "renderBlock" — must be a function that returns JSX.' });
+    }
+
+    if (!def.defaultData || typeof def.defaultData !== 'object') {
+        issues.push({ level: 'error', message: 'Missing "defaultData" — must be an object with at least "type" and "fieldName".' });
+    } else {
+        if (!def.defaultData.type) {
+            issues.push({ level: 'error', message: 'defaultData.type is missing.' });
+        }
+
+        if (!def.defaultData.fieldName) {
+            issues.push({ level: 'error', message: 'defaultData.fieldName is missing.' });
+        }
+    }
+
+    // Optional but recommended
+    if (!def.name) {
+        issues.push({ level: 'warning', message: 'Missing "name" — recommended for the builder UI.' });
+    }
+
+    if (!def.description) {
+        issues.push({ level: 'warning', message: 'Missing "description" — recommended for the builder UI.' });
+    }
+
+    if (!def.validate || typeof def.validate !== 'function') {
+        issues.push({ level: 'warning', message: 'Missing "validate" — recommended for builder-side config validation.' });
+    }
+
+    if (!def.validateValue || typeof def.validateValue !== 'function') {
+        issues.push({ level: 'warning', message: 'Missing "validateValue" — recommended for user input validation.' });
+    }
+
+    if (!def.renderItem || typeof def.renderItem !== 'function') {
+        issues.push({ level: 'warning', message: 'Missing "renderItem" — needed if used in the builder.' });
+    }
+
+    if (!def.renderPreview || typeof def.renderPreview !== 'function') {
+        issues.push({ level: 'warning', message: 'Missing "renderPreview" — needed if used in the builder.' });
+    }
+
+    // Test render
+    if (def.renderBlock && def.defaultData) {
+        try {
+            def.renderBlock({
+                block: def.defaultData,
+                value: '',
+                onChange: () => {},
+                error: undefined,
+                disabled: false,
+            });
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Unknown render error';
+            issues.push({ level: 'error', message: `renderBlock crashed: ${message}` });
+        }
+    }
+
+    if (issues.length === 0) {
+        issues.push({ level: 'warning', message: 'All checks passed.' });
+    }
+
+    return issues;
+}

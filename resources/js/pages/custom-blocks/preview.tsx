@@ -1,5 +1,3 @@
-import type { BlockDefinition } from '@/packages/survey-form-package/src/types';
-
 import { Head, Link } from '@inertiajs/react';
 import {
     AlertTriangle,
@@ -7,42 +5,35 @@ import {
     ChevronDown,
     Code2,
     Eye,
-    ExternalLink,
+
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { ErrorBoundary } from '@/components/error-boundry';
 import { transpileAndExtract } from '@/lib/transpile-block';
-import { registerBlock } from '@/packages/survey-form-package/src';
+import {
+    blockRegistry,
+    registerBlock,
+} from '@/packages/survey-form-package/src';
 import SurveyForm from '@/packages/survey-form-package/src';
-
-interface CustomBlock {
-    id: number;
-    name: string;
-    type: string;
-    description: string | null;
-    icon_name: string;
-    source_code: string;
-    is_active: boolean;
-}
+import type { BlockDefinition } from '@/packages/survey-form-package/src/types';
+import type { CustomBlockCollection } from '@/types/custom-block';
 
 export default function BlockPreviewPage({
     blocks,
 }: {
-    blocks: CustomBlock[];
+    blocks: CustomBlockCollection;
 }) {
-    const [registered, setRegistered] = useState(false);
-    const [errors, setErrors] = useState<string[]>([]);
     const [submittedData, setSubmittedData] = useState<Record<
         string,
         unknown
     > | null>(null);
     const [debugOpen, setDebugOpen] = useState(false);
 
-    useEffect(() => {
+    const { errors, registered } = useMemo(() => {
         const errs: string[] = [];
 
-        blocks.forEach((block) => {
+        blocks.data.forEach((block) => {
             const result = transpileAndExtract(block.source_code);
 
             if (result.success && result.blockDefinition) {
@@ -61,24 +52,26 @@ export default function BlockPreviewPage({
             }
         });
 
-        setErrors(errs);
-        setRegistered(true);
+        return { errors: errs, registered: true };
     }, [blocks]);
 
-    const surveyData = {
+    const surveyData = useMemo(() => ({
         rootNode: {
             type: 'section' as const,
             uuid: 'root',
             name: 'Custom Blocks Preview',
-            items: blocks.map((block, index) => ({
-                type: block.type,
-                uuid: `block-${index}`,
-                fieldName: `field_${block.type}`,
-                label: block.name,
-                placeholder: `Enter ${block.name.toLowerCase()}...`,
-            })),
+            items: blocks.data.map((block, index) => {
+                const def = blockRegistry[block.type];
+
+                return {
+                    ...def?.defaultData,
+                    type: block.type,
+                    uuid: `block-${index}`,
+                    fieldName: def?.defaultData?.fieldName || `field_${block.type}`,
+                };
+            }),
         },
-    };
+    }), [blocks, registered]);
 
     const handleSubmit = (data: Record<string, unknown>) => {
         setSubmittedData(data);
@@ -118,8 +111,10 @@ export default function BlockPreviewPage({
                                     Form Preview
                                 </span>
                                 <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
-                                    {blocks.length}{' '}
-                                    {blocks.length === 1 ? 'block' : 'blocks'}
+                                    {blocks.data.length}{' '}
+                                    {blocks.data.length === 1
+                                        ? 'block'
+                                        : 'blocks'}
                                 </span>
                             </div>
                         </div>
@@ -156,7 +151,7 @@ export default function BlockPreviewPage({
 
                 {/* Form area */}
                 <div className="mx-auto w-full px-6 py-8">
-                    {blocks.length === 0 ? (
+                    {blocks.data.length === 0 ? (
                         <div className="flex flex-col items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 py-20">
                             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950">
                                 <Eye className="h-6 w-6 text-zinc-600" />
