@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Attributes\Guarded;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,8 +15,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $icon_name
  * @property string $source_code
  * @property bool $is_active
- * @property \Carbon\CarbonImmutable|null $created_at
- * @property \Carbon\CarbonImmutable|null $updated_at
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
+ *
  * @method static Builder<static>|CustomBlock newModelQuery()
  * @method static Builder<static>|CustomBlock newQuery()
  * @method static Builder<static>|CustomBlock query()
@@ -31,11 +32,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @method static Builder<static>|CustomBlock whereSourceCode($value)
  * @method static Builder<static>|CustomBlock whereType($value)
  * @method static Builder<static>|CustomBlock whereUpdatedAt($value)
+ *
  * @mixin \Eloquent
  */
 class CustomBlock extends Model
 {
     protected $guarded = ['id'];
+
     protected $casts = [
         'is_active' => 'boolean',
     ];

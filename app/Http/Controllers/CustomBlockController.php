@@ -89,7 +89,7 @@ class CustomBlockController extends Controller
     {
         $this->authorize('update', $customBlock);
 
-        $customBlock->update(['is_active' => !$customBlock->is_active]);
+        $customBlock->update(['is_active' => ! $customBlock->is_active]);
 
         return back();
     }

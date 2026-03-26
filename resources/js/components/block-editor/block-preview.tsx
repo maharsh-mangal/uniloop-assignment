@@ -1,14 +1,14 @@
-import type { BlockDefinition } from '@/packages/survey-form-package/src/types';
 
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ErrorBoundary } from '@/components/error-boundry';
 import { transpileAndExtract } from '@/lib/transpile-block';
+import type { BlockDefinition } from '@/packages/survey-form-package/src/types';
 
-import type { PreviewStatus } from './status-indicator';
 
 import { ErrorDisplay } from './error-display';
+import type { PreviewStatus } from './status-indicator';
 
 function LiveBlock({ blockDef }: { blockDef: BlockDefinition }) {
     const [formValue, setFormValue] = useState('');

@@ -34,6 +34,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
             if (this.props.fallback) {
                 return this.props.fallback(this.state.error, this.reset);
             }
+
             return (
                 <div className="rounded-lg border border-red-200 bg-red-50 p-4">
                     <div className="mb-1 text-sm font-medium text-red-800">Render Error</div>
@@ -43,6 +44,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
                 </div>
             );
         }
+
         return this.props.children;
     }
 }

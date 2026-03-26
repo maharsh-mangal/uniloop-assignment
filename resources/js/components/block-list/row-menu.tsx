@@ -1,7 +1,7 @@
-import type { CustomBlock } from '@/types/custom-block';
 
 import { Eye, MoreVertical, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
+import type { CustomBlock } from '@/types/custom-block';
 
 export function RowMenu({
     block,
