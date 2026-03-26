@@ -100,6 +100,15 @@ export default function CustomBlocksIndex({
                             </div>
                             <div className="flex items-center gap-3">
                                 <Link
+                                    href="/custom-blocks-builder"
+                                    target="_blank"
+                                    className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:border-zinc-700 hover:bg-zinc-800 hover:text-zinc-100"
+                                >
+                                    <Code2 className="h-4 w-4" />
+                                    Form Builder
+                                    <ExternalLink className="h-3 w-3 text-zinc-600" />
+                                </Link>
+                                <Link
                                     href="/custom-blocks-preview"
                                     target="_blank"
                                     className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:border-zinc-700 hover:bg-zinc-800 hover:text-zinc-100"

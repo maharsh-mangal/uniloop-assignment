@@ -12,7 +12,6 @@ import { useMemo, useState } from 'react';
 import { ErrorBoundary } from '@/components/error-boundry';
 import { transpileAndExtract } from '@/lib/transpile-block';
 import {
-    blockRegistry,
     registerBlock,
 } from '@/packages/survey-form-package/src';
 import SurveyForm from '@/packages/survey-form-package/src';
@@ -55,28 +54,28 @@ export default function BlockPreviewPage({
         return { errors: errs, registered: true };
     }, [blocks]);
 
-    const surveyData = useMemo(() => ({
-        rootNode: {
-            type: 'section' as const,
-            uuid: 'root',
-            name: 'Custom Blocks Preview',
-            items: blocks.data.map((block, index) => {
-                const def = blockRegistry[block.type];
-
-                return {
-                    ...def?.defaultData,
+    const surveyData = useMemo(
+        () => ({
+            rootNode: {
+                type: 'section' as const,
+                uuid: 'root',
+                name: 'Custom Blocks Preview',
+                items: blocks.data.map((block, index) => ({
                     type: block.type,
                     uuid: `block-${index}`,
-                    fieldName: def?.defaultData?.fieldName || `field_${block.type}`,
-                };
-            }),
-        },
-    }), [blocks, registered]);
+                    fieldName: `field_${block.type}`,
+                    label: block.name,
+                    placeholder: `Enter ${block.name.toLowerCase()}...`,
+                    showContinueButton: true,
+                })),
+            },
+        }),
+        [blocks, registered],
+    );
 
     const handleSubmit = (data: Record<string, unknown>) => {
         setSubmittedData(data);
         setDebugOpen(true);
-        console.log('Form submitted:', data);
     };
 
     if (!registered) {

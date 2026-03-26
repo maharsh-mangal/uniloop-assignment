@@ -93,4 +93,14 @@ class CustomBlockController extends Controller
 
         return back();
     }
+
+    //Form Builder
+    public function builder(Request $request)
+    {
+        return Inertia::render('custom-blocks/builder', [
+            'blocks' => CustomBlockResource::collection(
+                $request->user()->customBlocks()->where('is_active', true)->get()
+            ),
+        ]);
+    }
 }
